@@ -1,6 +1,6 @@
-use std::{default, f32::INFINITY, fmt, pin::Pin, process::exit, rc::Rc};
+use std::{fmt, future::Future, pin::Pin, rc::Rc, task::Poll, time::Instant};
 
-// TASK: for the following types: Box<T>, Rc<T>, Vec<T>, String, &[u8], T.
+// TASK 1 : for the following types: Box<T>, Rc<T>, Vec<T>, String, &[u8], T.
 // Implement the following traits:
 trait SayHi: fmt::Debug {
     fn say_hi(self: Pin<&Self>) {
@@ -97,7 +97,56 @@ impl MutMeSomehow for &[u8] {
 //     }
 // }
 
+// TASK 2. For the following structure
+struct MeasurableFuture<Fut> {
+    inner_future: Fut,
+    started_at: Option<Instant>,
+}
+
+// constructor
+impl<Fut> MeasurableFuture<Fut> {
+    fn new(inner_future: Fut) -> Self {
+        Self {
+            inner_future,
+            started_at: None,
+        }
+    }
+}
+
+// Provide a Future trait implementation, transparently polling the inner_future,
+// and printing its execution time in nanoseconds once it's ready.
+// Using Fut: Unpin trait bound (or similar) is not allowed.
+
+impl<Fut: Future> Future for MeasurableFuture<Fut> {
+    type Output = Fut::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        unsafe {
+            let u_fut = self.get_unchecked_mut();
+
+            // start calculating time from this point
+            if u_fut.started_at.is_none() {
+                u_fut.started_at = Some(Instant::now());
+            }
+
+            // create pin for inner_future
+            let inner_pin = Pin::new_unchecked(&mut u_fut.inner_future);
+
+            //call poll for inner future
+            match inner_pin.poll(cx) {
+                Poll::Ready(res) => {
+                    let took_time = u_fut.started_at.unwrap().elapsed();
+                    println!("took time: {} nanoseconds", took_time.as_nanos());
+                    Poll::Ready(res)
+                }
+                Poll::Pending => Poll::Pending,
+            }
+        }
+    }
+}
+
 fn main() {
+    // example: call mut_me_somehow() for the String
     let mut s = String::from("older");
     let pinned = Pin::new(&mut s);
 
