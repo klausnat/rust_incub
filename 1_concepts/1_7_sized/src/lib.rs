@@ -131,6 +131,31 @@ mod tests {
 
         let cmd = CreateUser { user: user.clone() };
 
-        let mut mockRepo = MockUserRepository { users: Vec::new() };
+        let mut mock_repo = MockUserRepository { users: Vec::new() };
+
+        let result = user.handle_command(&cmd, &mut mock_repo);
+        assert!(result.is_ok());
+
+        assert_eq!(mock_repo.users.len(), 1);
+        assert_eq!(mock_repo.users[0].id, 1);
+    }
+
+    #[test]
+    fn test_create_user_duplicate() {
+        let user = User {
+            id: 1,
+            email: Cow::Borrowed("hello@gmail.com"),
+            activated: false,
+        };
+
+        let cmd = CreateUser { user: user.clone() };
+        let mut mock_repo = MockUserRepository {
+            users: vec![user.clone()],
+        };
+
+        let result = user.handle_command(&cmd, &mut mock_repo);
+        assert!(result.is_err());
+        assert!(matches!(result, Err(UserError::AlreadyExists)));
+        assert_eq!(mock_repo.users.len(), 1);
     }
 }
