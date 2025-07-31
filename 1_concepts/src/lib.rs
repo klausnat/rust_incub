@@ -105,34 +105,88 @@ impl<T: Clone + Copy> List<T> {
         new_node.lock().unwrap().r_next = old_next;
     }
 
+    //@TODO implement insert before
+
     // remove node
     // Remove a node identified by its Arc<Mutex<Node<T>>>
-    pub fn remove_node(&self, node_to_remove: &Arc<Mutex<Node<T>>>) -> Result<(), &'static str> {
+    // self should be mutable in order to handle border cases (deletion of first or last node)
+    pub fn remove_node(
+        &mut self,
+        node_to_remove: &Arc<Mutex<Node<T>>>,
+    ) -> Result<(), &'static str> {
         // Get the node's previous and next pointers
         let (prev, next) = {
             let node = node_to_remove.lock().unwrap();
             (node.r_previous.clone(), node.r_next.clone())
         };
 
+        // Check if we're removing the first node
+        let is_first = Arc::ptr_eq(node_to_remove, &self.first);
+        // Check if we're removing the last node
+        let is_last = Arc::ptr_eq(node_to_remove, &self.last);
+
         // Update previous node's next pointer if it exists
-        if let Some(prev_weak) = prev {
+        if let Some(prev_weak) = &prev {
             if let Some(prev_node) = prev_weak.upgrade() {
                 let mut prev = prev_node.lock().unwrap();
                 prev.r_next = next.clone();
             }
         }
+
         // Update next node's previous pointer if it exists
-        else if let Some(next_node) = next {
+        if let Some(next_node) = &next {
             let mut next = next_node.lock().unwrap();
-            next.r_previous = prev;
+            next.r_previous = prev.clone();
+        }
+
+        // Update list's first pointer if we removed the first node
+        if is_first {
+            if let Some(new_first) = next {
+                // Clear the new first's previous pointer
+                let mut new_first_guard = new_first.lock().unwrap();
+                new_first_guard.r_previous = None;
+                drop(new_first_guard); // Explicit drop to release lock
+
+                self.first = new_first;
+            } else {
+                // Trying to remove the only node in the list
+                return Err("Cannot remove the only node in the list");
+            }
+        }
+
+        // Update list's last pointer if we removed the last node
+        if is_last {
+            if let Some(new_last_weak) = prev {
+                if let Some(new_last) = new_last_weak.upgrade() {
+                    // Clear the new last's next pointer
+                    let mut new_last_guard = new_last.lock().unwrap();
+                    new_last_guard.r_next = None;
+                    drop(new_last_guard); // Explicit drop to release lock
+
+                    self.last = new_last;
+                }
+            } else {
+                // Trying to remove the only node in the list
+                return Err("Cannot remove the only node in the list");
+            }
         }
 
         Ok(())
     }
 }
 
+// @TODO
+// Implement Iterator trait (so filter, map, into_iter, etc could be used)
+// 1. Create a custom iterator types:
+//   struct Iter (for non-consuming traversal)
+//   struct IntoIter (for consuming traversal)
+//   struct IterMut (for mutable Iterator)
+// 2. Implement iterator for these types
+
 #[cfg(test)]
 mod tests {
+    use std::os::unix::thread;
+
     use super::*;
 
     #[test]
@@ -180,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_remove_node() {
-        let list = List::new(2, 3);
+        let mut list = List::new(2, 3);
 
         // Insert a node to make list: 2 -> 5 -> 3
         let first_node = Arc::clone(&list.first);
@@ -201,5 +255,54 @@ mod tests {
         let mut items = Vec::new();
         list.traverse(|x| items.push(*x));
         assert_eq!(items, vec![2, 3]);
+    }
+
+    #[test]
+    fn test_remove_first_node() {
+        let mut list = List::new(2, 3);
+
+        // Insert a node to make list: 2 -> 5 -> 3
+        let first_node = Arc::clone(&list.first);
+        list.insert_after(&first_node, 5);
+        assert_eq!(list.len(), 3);
+
+        let mut items = Vec::new();
+        list.traverse(|x| items.push(*x));
+        assert_eq!(items, vec![2, 5, 3]);
+
+        //Remove the first node
+        list.remove_node(&first_node).unwrap();
+        assert_eq!(list.len(), 2);
+
+        // Verify list is now 5 -> 3
+        let mut items = Vec::new();
+        list.traverse(|x| items.push(*x));
+        assert_eq!(items, vec![5, 3]);
+    }
+
+    #[test]
+    fn test_multi_threaded() {
+        let list = Arc::new(List::new(2, 3));
+
+        // Insert a node to make list: 2 -> 5 -> 3
+        let first_node = Arc::clone(&list.first);
+        list.insert_after(&first_node, 5);
+        assert_eq!(list.len(), 3);
+
+        let mut handles = vec![];
+
+        // 4 threads and each runs `traverse()` to modify the list (Mutex inside protects each node and concurence is safe)
+        for _ in 0..4 {
+            let list = Arc::clone(&list);
+            handles.push(std::thread::spawn(move || list.traverse(|x| *x += 1)));
+        }
+
+        for handle in handles {
+            handle.join().unwrap()
+        }
+
+        let mut items = Vec::new();
+        list.traverse(|x| items.push(*x));
+        assert_eq!(items, vec![2 + 4, 5 + 4, 3 + 4]);
     }
 }
