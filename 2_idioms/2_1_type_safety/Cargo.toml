@@ -3,3 +3,6 @@ name = "step_2_1"
 version = "0.1.0"
 edition = "2021"
 publish = false
+
+[dependencies]
+nutype = "0.6.2"
