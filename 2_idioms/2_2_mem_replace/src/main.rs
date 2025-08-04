@@ -1,3 +1,5 @@
+use std::mem;
+
 fn main() {
     let mut s = Solver {
         expected: Trinity { a: 1, b: 2, c: 3 },
@@ -12,21 +14,17 @@ fn main() {
     println!("{:?}", s)
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 struct Trinity<T> {
     a: T,
     b: T,
     c: T,
 }
 
-impl<T: Clone> Trinity<T> {
+impl<T> Trinity<T> {
     fn rotate(&mut self) {
-        let a = self.a.clone();
-        let b = self.b.clone();
-        let c = self.c.clone();
-        self.a = b;
-        self.b = c;
-        self.c = a;
+        std::mem::swap(&mut self.a, &mut self.c);
+        std::mem::swap(&mut self.b, &mut self.a);
     }
 }
 
@@ -36,18 +34,19 @@ struct Solver<T> {
     unsolved: Vec<Trinity<T>>,
 }
 
-impl<T: Clone + PartialEq> Solver<T> {
+impl<T: PartialEq> Solver<T> {
     fn resolve(&mut self) {
-        let mut unsolved = Vec::with_capacity(self.unsolved.len());
-        'l: for t in self.unsolved.iter_mut() {
+        let mut unsolved = mem::take(&mut self.unsolved);
+
+        unsolved.retain_mut(|t| {
             for _ in 0..3 {
                 if *t == self.expected {
-                    continue 'l;
+                    return false;
                 }
                 t.rotate();
             }
-            unsolved.push(t.clone())
-        }
+            true
+        });
         self.unsolved = unsolved;
     }
 }
