@@ -3,7 +3,7 @@ use std::net::{IpAddr, SocketAddr};
 fn main() {
     println!("Refactor me!");
 
-    let mut err = Error::new("NO_USER".to_string());
+    let err = Error::new("NO_USER".to_string());
     err.status(404).message("User not found".to_string());
 }
 
@@ -15,30 +15,30 @@ pub struct Error {
 }
 
 impl Default for Error {
-    #[inline]
     fn default() -> Self {
         Self {
-            code: "UNKNOWN".to_string(),
+            code: "UNKNOWN".into(),
             status: 500,
-            message: "Unknown error has happened.".to_string(),
+            message: "Unknown error has happened.".into(),
         }
     }
 }
 
 impl Error {
-    pub fn new(code: String) -> Self {
-        let mut err = Self::default();
-        err.code = code;
-        err
+    pub fn new<S: Into<String>>(code: S) -> Self {
+        Self {
+            code: code.into(),
+            ..Self::default()
+        }
     }
 
-    pub fn status(&mut self, s: u16) -> &mut Self {
+    pub fn status(mut self, s: u16) -> Self {
         self.status = s;
         self
     }
 
-    pub fn message(&mut self, m: String) -> &mut Self {
-        self.message = m;
+    pub fn message<S: Into<String>>(mut self, m: S) -> Self {
+        self.message = m.into();
         self
     }
 }
@@ -47,8 +47,8 @@ impl Error {
 pub struct Server(Option<SocketAddr>);
 
 impl Server {
-    pub fn bind(&mut self, ip: IpAddr, port: u16) {
-        self.0 = Some(SocketAddr::new(ip, port))
+    pub fn bind(&mut self, ip: impl Into<IpAddr>, port: u16) {
+        self.0 = Some(SocketAddr::new(ip.into(), port))
     }
 }
 
@@ -65,11 +65,11 @@ mod server_spec {
         fn sets_provided_address_to_server() {
             let mut server = Server::default();
 
-            server.bind(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+            server.bind(Ipv4Addr::new(127, 0, 0, 1), 8080);
             assert_eq!(format!("{}", server.0.unwrap()), "127.0.0.1:8080");
 
-            server.bind("::1".parse().unwrap(), 9911);
-            assert_eq!(format!("{}", server.0.unwrap()), "[::1]:9911");
+            server.bind("::1".parse::<IpAddr>().unwrap(), 9911);
+            assert_eq!(server.0.unwrap().to_string(), "[::1]:9911");
         }
     }
 }
