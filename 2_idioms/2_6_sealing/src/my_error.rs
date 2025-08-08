@@ -6,6 +6,10 @@ use std::{
     fmt::{Debug, Display},
 };
 
+mod private {
+    pub struct Token;
+}
+
 /// Basic expectations for error values.
 pub trait MyError: Debug + Display {
     /// The lower-level source of this error, if any.
@@ -67,7 +71,7 @@ pub trait MyError: Debug + Display {
     ///
     /// __This is memory-unsafe to override in user code.__
     #[doc(hidden)]
-    fn type_id(&self) -> TypeId
+    fn type_id(&self, _: private::Token) -> TypeId
     where
         Self: 'static,
     {
@@ -78,5 +82,26 @@ pub trait MyError: Debug + Display {
 impl<'a, T: MyError + ?Sized> MyError for &'a T {
     fn source(&self) -> Option<&(dyn MyError + 'static)> {
         MyError::source(&**self)
+    }
+}
+
+#[derive(Debug)]
+struct TypeImplsTraitMyError{}
+impl Display for TypeImplsTraitMyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
+impl MyError for TypeImplsTraitMyError {
+    fn source(&self) -> Option<&(dyn MyError + 'static)> {
+        None
+    }
+
+    fn type_id(&self, _: private::Token) -> TypeId
+    where
+        Self: 'static,
+    {
+        TypeId::of::<Self>()
     }
 }
