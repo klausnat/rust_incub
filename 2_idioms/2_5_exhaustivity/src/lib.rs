@@ -8,6 +8,7 @@ pub mod user {
     use super::{event, EventSourced};
 
     #[derive(Debug)]
+    #[non_exhaustive] // struct User can have more fields in future
     pub struct User {
         pub id: Id,
         pub name: Option<Name>,
@@ -28,12 +29,14 @@ pub mod user {
     impl EventSourced<event::UserNameUpdated> for User {
         fn apply(&mut self, ev: &event::UserNameUpdated) {
             self.name = ev.name.clone();
+            self.last_activity_at = LastActivityDateTime(ev.at);
         }
     }
 
     impl EventSourced<event::UserBecameOnline> for User {
         fn apply(&mut self, ev: &event::UserBecameOnline) {
             self.online_since = Some(ev.at);
+            self.last_activity_at = LastActivityDateTime(ev.at);
         }
     }
 
@@ -52,6 +55,7 @@ pub mod user {
     }
 
     #[derive(Debug)]
+    #[non_exhaustive]
     pub enum Event {
         Created(event::UserCreated),
         NameUpdated(event::UserNameUpdated),
@@ -62,23 +66,16 @@ pub mod user {
 
     impl EventSourced<Event> for User {
         fn apply(&mut self, ev: &Event) {
-            // Creation
-            if let Event::Created(ev) = ev {
-                self.apply(ev);
-                return;
-            }
-            // Online/Offline
-            if let Event::Online(ev) = ev {
-                self.apply(ev);
-                return;
-            }
-            if let Event::Offline(ev) = ev {
-                self.apply(ev);
-                return;
-            }
-            // Deletion
-            if let Event::Deleted(ev) = ev {
-                self.apply(ev);
+            match ev {
+                // Creation
+                Event::Created(ev) => self.apply(ev),
+                Event::NameUpdated(ev) => self.apply(ev),
+                // Online/Offline
+                Event::Online(ev) => self.apply(ev),
+                Event::Offline(ev) => self.apply(ev),
+                // Deletion
+                Event::Deleted(ev) => self.apply(ev),
+                // Compiler will warn if we add new variants thanks to #[non_exhaustive]
             }
         }
     }
