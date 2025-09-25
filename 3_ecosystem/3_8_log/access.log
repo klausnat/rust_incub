@@ -1,0 +1,4 @@
+{"timestamp":"2025-09-25T11:28:50.811989271Z","level":"DEBUG","fields":{"lvl":"DEBUG","file":"app.log","time":true,"message":"some debug information","method":"POST","path":"http://hello.com"},"target":"step_3_8"}
+{"timestamp":"2025-09-25T11:28:50.812069030Z","level":"INFO","fields":{"lvl":"INFO","file":"app.log","time":true,"message":"some info message","method":"POST","path":"http://hello.com"},"target":"step_3_8"}
+{"timestamp":"2025-09-25T11:28:50.812087120Z","level":"ERROR","fields":{"lvl":"ERROR","file":"app.log","time":true,"message":"some Error message"},"target":"step_3_8"}
+{"timestamp":"2025-09-25T11:28:50.812135811Z","level":"WARN","fields":{"lvl":"WARNING","file":"app.log","time":true,"message":"some warning message"},"target":"step_3_8"}
