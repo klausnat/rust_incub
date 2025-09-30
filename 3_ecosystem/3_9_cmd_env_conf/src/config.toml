@@ -1,0 +1,6 @@
+debug = false
+
+[database]
+username = "app_user"
+password = "secure_password"
+database_name = "production_db"
