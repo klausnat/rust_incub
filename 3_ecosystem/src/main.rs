@@ -2,13 +2,11 @@ use clap::Parser;
 use image::codecs::jpeg::JpegEncoder; // For direct quality control
 use image::ImageReader;
 use num_cpus;
-//use core::num;
-//use reqwest;
-//use std::fs;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::BufWriter;
+use std::io::Cursor;
 use tokio;
 
 /// Run the application (examples):
@@ -18,7 +16,7 @@ use tokio;
 ///
 /// max_images = how much images are processed at the same time
 /// output_directory = output directory to store processed images in
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 struct Args {
     #[arg(long, default_value_t = num_cpus::get())]
     max_images: usize,
@@ -53,7 +51,7 @@ fn get_links(file: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 }
 
 fn create_filename(url: String, backup_name: i32) -> String {
-    let mut filename = url.clone();
+    let filename;
     // if url is web link - create appropriate filename
     if url.starts_with("http") || url.starts_with("www.") {
         if let Some(res) = url.split('/').last() {
@@ -62,32 +60,60 @@ fn create_filename(url: String, backup_name: i32) -> String {
             filename = backup_name.to_string();
         }
     } else {
-        filename = url
+        filename = url.to_string()
     }
 
     filename
 }
 
-async fn compress_imgs(
-    urls: Vec<String>,
-    options: &Args,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn download_and_decode_image_from_url(
+    url: &str,
+) -> Result<image::DynamicImage, Box<dyn std::error::Error>> {
+    let response = reqwest::get(url).await?;
+    let bytes = response.bytes().await?;
+
+    let img = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()?
+        .decode()?;
+
+    Ok(img)
+}
+
+async fn create_output_file_and_encoder(
+    filename: String,
+    options: Args,
+) -> Result<(JpegEncoder<BufWriter<File>>), Box<dyn std::error::Error>> {
+    let out_fl = File::create(options.output_directory.to_owned() + filename.as_str())?;
+    let writer = BufWriter::new(out_fl);
+    let encoder = JpegEncoder::new_with_quality(writer, options.quality);
+    Ok(encoder)
+}
+
+async fn compress_imgs(urls: Vec<String>, options: Args) -> Result<(), Box<dyn std::error::Error>> {
     let mut backup_name = 0;
     let mut handles = vec![];
     for url in urls {
         backup_name += 1;
         let options = options.clone();
-        let output_dir_clone = options.output_directory.clone();
-        let quality = options.quality;
-        
+        let filename = create_filename(url.clone(), backup_name);
+
         let handle = if url.starts_with("http") || url.starts_with("www.") {
+            // we are working with URL, will use reqwest crate
             tokio::spawn(async move {
-                let filename = create_filename(url, backup_name);
+                let img = match download_and_decode_image_from_url(url.as_str()).await {
+                    Ok(img) => img,
+                    Err(e) => {
+                        println!("couldn't download img: {}", e);
+                        return;
+                    }
+                };
+
+                if let Ok(encoder) = create_output_file_and_encoder(filename, options).await {
+                    img.write_with_encoder(encoder).unwrap()
+                } else {
+                    println!("couldn't create output file and encoder for URL: {}", &url)
+                }
             })
-            // @TODO =====================================================
-            // @TODO do via reqwest::get() only works with HTTP/HTTPS URLs
-            //       example: https://kusoksala.ru/images/logo.jpg
-            // @TODO =====================================================
         } else {
             // do via ImageReader::open() - works with local file paths
             tokio::spawn(async move {
@@ -105,21 +131,14 @@ async fn compress_imgs(
                     return; // or continue/break depending on your context
                 };
 
-                // Create the output file
-
-                let out_fl = File::create(output_dir_clone.to_owned() + &url);
-                let output_file = match out_fl {
-                    Ok(res) => res,
-                    Err(e) => {
-                        println!("couldn't create output file, due to error: {}", e);
-                        return;
-                    }
-                };
-                let mut writer = BufWriter::new(output_file);
-
-                // Create an encoder with a specific quality (1-100, lower means more compression)
-                let encoder = JpegEncoder::new_with_quality(&mut writer, quality);
-                img.write_with_encoder(encoder);
+                if let Ok(encoder) = create_output_file_and_encoder(filename, options).await {
+                    img.write_with_encoder(encoder).unwrap()
+                } else {
+                    println!(
+                        "couldn't create output file and encoder for LOCAL PATH: {}",
+                        &url
+                    )
+                }
             })
         };
         handles.push(handle);
@@ -132,34 +151,8 @@ async fn compress_imgs(
 }
 
 // @TODO
-// 1. make it work assyncronously with Tokio (with simple links, not urls)
-// 2. make it work with urls too, using reqwest
-/*
-// Async version (if you prefer)
-#[tokio::main]
-async fn download_and_decode_image_async(url: &str) -> Result<image::DynamicImage, Box<dyn std::error::Error>> {
-    let response = reqwest::get(url).await?;
-    let bytes = response.bytes().await?;
-
-    let img = ImageReader::new(Cursor::new(bytes))
-        .with_guessed_format()?
-        .decode()?;
-
-    Ok(img)
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let url = "https://kusoksala.ru/images/logo.jpg";
-    let img = download_and_decode_image(url)?;
-
-    println!("Image dimensions: {}x{}", img.width(), img.height());
-
-    // Save the image locally if needed
-    img.save("downloaded_image.jpg")?;
-
-    Ok(())
-}
-     */
+// 1. сделать так, чтобы max_images использовался
+// 2.
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -172,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("link to image: {}", i)
     }
 
-    compress_imgs(list_links, &args).await?;
+    compress_imgs(list_links, args).await?;
 
     Ok(())
 }
