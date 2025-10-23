@@ -3,3 +3,12 @@ name = "step_3"
 version = "0.1.0"
 edition = "2021"
 publish = false
+
+[dependencies]
+clap = { version = "4.5.48", features = ["derive", "env"] }
+image = "0.25.8"
+num_cpus = "1.17.0"
+reqwest = "0.12.23"
+tokio = { version = "1.47.1", features = ["full"] }
+env_logger = "0.10"  # Logging and timing
+log = "0.4"          # Logging and timing
