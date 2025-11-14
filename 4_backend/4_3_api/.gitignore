@@ -1,0 +1,13 @@
+/.idea/
+/.vscode/
+/*.iml
+.DS_Store
+
+/Cargo.lock
+/target/
+
+**/*.rs.bk
+
+*.pdb
+
+.rust-analyzer/
