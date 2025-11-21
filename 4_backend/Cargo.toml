@@ -3,3 +3,15 @@ name = "step_4"
 version = "0.1.0"
 edition = "2021"
 publish = false
+
+[dependencies]
+async-graphql = "6.0"
+async-graphql-warp = "6.0"
+warp = "0.3"
+tokio = { version = "1.0", features = ["full"] }
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio", "macros", "chrono","uuid"] }
+serde = { version = "1.0", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+dotenvy = "0.15"
+bcrypt = "0.17.1"
